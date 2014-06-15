@@ -38,10 +38,11 @@ class wccp_web_cache_view_info_component:
 	def __init__(self,rip,ip):
 		self.type = WCCP2_WC_VIEW_INFO
 		self.length = "\x00\x14"
-		self.change = "\x00\x00\x00\x00"
+		self.change = "\x00\x00\x00\x01"
 		self.nRouter = "\x00\x00\x00\x01"
 		self.router_list = []
 		self.router_list.append(ip_address(rip).get_ip())
+		self.rID = "\x00\x00\x00\x00"
 		self.nCaches = "\x00\x00\x00\x00"
 		self.cache = ip_address(ip).get_ip()
 	def get_type(self):
@@ -54,6 +55,8 @@ class wccp_web_cache_view_info_component:
 		return self.nRouter
 	def get_router_list(self):
 		return self.router_list
+	def get_rid(self):
+		return self.rID
 	def get_ncache(self):
 		return self.nCaches
 	def get_cache(self):
@@ -64,8 +67,10 @@ class wccp_web_cache_identity_info_component:
 		self.length = "\x00\x2C"
 		ip = get_my_wan_address()
 		self.identity_element = ip_address(ip).get_ip()
-		self.rht = "\x00\x00\x00\x00\x01"
-		for i in range (0,35): self.rht = self.rht + "\x00"
+		self.rht = "\x00\x00\x00\x00"
+		for i in range (0,32): self.rht = self.rht + "\x00"
+		self.rht = self.rht + "\x27\x10"
+		self.rht = self.rht + "\x00\x00" 
 	def get_type(self):
 		return self.type
 	def get_length(self):
@@ -121,7 +126,7 @@ class wccp_header:
 		self.type = WCCP2_HERE_I_AM
 		self.version = WCCP2_VERSION
 		#8+28+24+24
-		self.length = "\x00\x54"
+		self.length = "\x00\x6C"
 	def get_type(self):
 		return self.type
 	def get_version(self):
@@ -174,8 +179,9 @@ class wccp_message:
 
 	 	for router in self.view_info.get_router_list():
 			byte_string = byte_string + router
+			byte_string = byte_string + self.view_info.get_rid()
 	 	byte_string = byte_string + self.view_info.get_ncache()
-	 	byte_string = byte_string + self.view_info.get_cache()
+	 	#byte_string = byte_string + self.view_info.get_cache()
 
 		return byte_string
 def main():
@@ -200,7 +206,7 @@ def main():
 
 	sock = socket.socket(socket.AF_INET,
 				socket.SOCK_DGRAM)
-	sock.settimeout(1)
+	sock.settimeout(2)
 	sock.bind(('',HOST_PORT))
 	
 	sock.sendto(message, (UDP_IP,HOST_PORT))
@@ -208,11 +214,12 @@ def main():
 	try:
 		data, addr = sock.recvfrom(1024)
 		if data:
-			print "received message:", str(len(data)) + " bytes"
+			print UDP_IP + " is WCCP enabled"
 	except KeyboardInterrupt:
 		print "Exiting!"
 		return 0
 	except socket.timeout:
+		print UDP_IP + " is not WCCP enabled"
 		sock.close()
 
 	return 0

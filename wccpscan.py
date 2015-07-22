@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import os
 import urllib2
@@ -62,10 +62,9 @@ class wccp_web_cache_view_info_component:
 	def get_cache(self):
 		return self.cache
 class wccp_web_cache_identity_info_component:
-	def __init__(self):
+	def __init__(self, ip):
 		self.type = WCCP2_WC_ID_INFO
 		self.length = "\x00\x2C"
-		ip = get_my_wan_address()
 		self.identity_element = ip_address(ip).get_ip()
 		self.rht = "\x00\x00\x00\x00"
 		for i in range (0,32): self.rht = self.rht + "\x00"
@@ -140,7 +139,7 @@ class wccp_message:
 		self.header = wccp_header()
 		self.security = wccp_security_component()
 		self.service_info = wccp_service_info_component()
-		self.identity_info = wccp_web_cache_identity_info_component()
+		self.identity_info = wccp_web_cache_identity_info_component(ip)
 		self.view_info = wccp_web_cache_view_info_component(rip,ip)
 	def get_message(self):
 		byte_string = ""
@@ -185,28 +184,35 @@ class wccp_message:
 
 		return byte_string
 def main():
-	parser = OptionParser()
-	parser.add_option("-t", "--target", dest="host", help="Target IP")
+        parser = OptionParser()
+        parser.add_option("-t", "--target", dest="host", help="Target IP")
+        parser.add_option("-m", "--myip", dest="myip", help="My WAN Address")
 	parser.add_option("-q", "--quiet", action="store_false", dest="verbose", default=True, help="Don't print status messages")
 
 	(options, args) = parser.parse_args()
-	
+
+        if not options.myip:
+            ip = get_my_wan_address()
+            print ip
+            exit(0)
+        else:
+            ip = options.myip
+
 	if not options.host:
 		print "Supply a host with -t"
 		return -1
 	
 	UDP_IP = options.host
 	HOST_PORT = 2048
-	
-	ip = get_my_wan_address()
-	print ip + " -> " + options.host
+
 
 	message = wccp_message(options.host,ip)
 	message = message.get_message()
 
 	sock = socket.socket(socket.AF_INET,
 				socket.SOCK_DGRAM)
-	sock.settimeout(2)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+	sock.settimeout(4)
 	sock.bind(('',HOST_PORT))
 	
 	sock.sendto(message, (UDP_IP,HOST_PORT))
@@ -214,12 +220,13 @@ def main():
 	try:
 		data, addr = sock.recvfrom(1024)
 		if data:
-			print UDP_IP + " is WCCP enabled"
+                    recvip,recvport = addr
+                    print "YES: " + recvip
 	except KeyboardInterrupt:
 		print "Exiting!"
 		return 0
 	except socket.timeout:
-		print UDP_IP + " is not WCCP enabled"
+                print "NO: " + UDP_IP
 		sock.close()
 
 	return 0

@@ -7,6 +7,10 @@ import time
 import wccplib as wlib
 from optparse import OptionParser
 
+g_app_exiting = False
+g_wccp_server_list = []
+g_current_ip = ""
+
 def ip_generator(start, stop):
     
     current = start
@@ -21,43 +25,72 @@ def get_ips_from_host(ip):
     if len(ip_list) == 2:
         return ip_list[0], ip_list[1]
     else:
-        print("IPs not formatted correctly")
+        print("[*] IPs not formatted correctly")
         raise ValueError
 
     return (None,None)
 
 def listener(sock):
-    print("Starting listener...") 
-    while True:
+    global g_wccp_server_list
+    global g_app_exiting
+    
+    print("[*] Starting listener...") 
+    while not g_app_exiting:
         try:
             data, addr = sock.recvfrom(1024)
             if data:
-                print("Received a hit from %s" % addr)
+                print("[*] Received a hit from %s" % addr)
+                g_wccp_server_list.append(addr)
         except KeyboardInterrupt:
+            print("\x08\x08[*] Exiting...")
             sock.close()
             exit(0)
-        time.sleep(0.1)
+def reporter():
+    global g_app_exiting
+    global g_current_ip
+
+    while not g_app_exiting:
+        data = raw_input("")
+        print("[*] Current IP %s" % g_current_ip)
+        time.sleep(1)
+def show_stats():
+    if len(g_wccp_server_list) == 0:
+        print("[*] Nothing found!")
+    else:
+        print("[-] Found %d WCCP servers!" % len(g_wccp_server_list))
+        for entry in g_wccp_server_list:
+            print("\tActive: %s" % entry)
+
         
 def main():
+    global g_app_exiting
+    global g_wccp_server_list
+    global g_current_ip
+
     parser = OptionParser()
-    parser.add_option("-t", "--target", dest="host", help="Target IP range")
-    parser.add_option("-q", "--quiet", action="store_false", dest="verbose", default=True, help="Don't print status messages")
+    parser.add_option("-t", "--target", dest="hostrange", help="IP range: x.x.x.x-y.y.y.y")
+    parser.add_option("-s", "--server", dest="serveraddr", help="WCCP Server IP (disables NAT punch-through)")
+
 
     (options, args) = parser.parse_args()
     
-    if not options.host:
-        print "Supply a host with -t"
+    if not options.hostrange:
+        print "Supply a host range with -t"
 	return -1
     
-    wan_ip = wlib.get_my_wan_address()
+    if not options.serveraddr:
+        wan_ip = wlib.get_my_wan_address()
+        print("[*] External WAN address %s" % wan_ip)
+    else:
+        wan_ip = options.serveraddr
+        print("[*] Using manual server address %s" % wan_ip)
     
-    print("External WAN address %s" % wan_ip)
 
     HOST_PORT = 2048
 
-    start, stop = get_ips_from_host(options.host)
+    start, stop = get_ips_from_host(options.hostrange)
 
-    print("Starting address %s\nStopping address %s" % (start, stop))
+    print("[*] Starting address %s\n[*] Stopping address %s" % (start, stop))
 
     startObj = wlib.ip_address(start)
     stopObj = wlib.ip_address(stop)
@@ -70,7 +103,11 @@ def main():
     t.setDaemon(True)
     t.start()
 
-    print("Running scan...")
+    r = threading.Thread(target=reporter)
+    r.setDaemon(True)
+    r.start()
+
+    print("[*] Running scan...")
     try:
         for ip in ip_generator(startObj, stopObj):
             if ip.bytes2string() == None:
@@ -78,19 +115,30 @@ def main():
             message = wlib.wccp_message(ip,wan_ip)
             message = message.get_message()
 
-            UDP_IP = ip.bytes2string()
+            g_current_ip = ip.bytes2string()
 
-            sock.sendto(message, (UDP_IP,HOST_PORT))
+            sock.sendto(message, (g_current_ip,HOST_PORT))
             time.sleep(0.1)
+
     except KeyboardInterrupt:
+        print("\x08\x08[*] Exiting...")
+        show_stats()
         sock.close()
         exit(0)
 
-    print("Sending complete...")
+    print("[*] Sending complete...")
 
-    t.join()
+    print("[*] Waiting 2 seconds for any delayed responses...")
+    time.sleep(2)
+
+    print("[*] Wrapping things up...")
+
+    show_stats()
+
+    g_app_exiting = True
 
     return 0
 
 if __name__=="__main__":
 	ret = main()
+        exit(0)

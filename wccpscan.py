@@ -39,8 +39,8 @@ def listener(sock):
         try:
             data, addr = sock.recvfrom(1024)
             if data:
-                print("[*] Received a hit from %s" % addr)
                 g_wccp_server_list.append(addr)
+                print("[*] Received a hit from " + str(addr))
         except KeyboardInterrupt:
             print("\x08\x08[*] Exiting...")
             sock.close()
@@ -57,9 +57,9 @@ def show_stats():
     if len(g_wccp_server_list) == 0:
         print("[*] Nothing found!")
     else:
-        print("[-] Found %d WCCP servers!" % len(g_wccp_server_list))
+        print("[-] Found %d WCCP servers" % len(g_wccp_server_list))
         for entry in g_wccp_server_list:
-            print("\tActive: %s" % entry)
+            print(entry)
 
         
 def main():
@@ -118,7 +118,7 @@ def main():
             g_current_ip = ip.bytes2string()
 
             sock.sendto(message, (g_current_ip,HOST_PORT))
-            time.sleep(0.1)
+            time.sleep(0.0001)
 
     except KeyboardInterrupt:
         print("\x08\x08[*] Exiting...")

@@ -10,6 +10,7 @@ from optparse import OptionParser
 g_app_exiting = False
 g_wccp_server_list = []
 g_current_ip = ""
+g_logfile_handle = None
 
 def ip_generator(start, stop):
     
@@ -39,8 +40,13 @@ def listener(sock):
         try:
             data, addr = sock.recvfrom(1024)
             if data:
+                host, port = addr
                 g_wccp_server_list.append(addr)
-                print("[*] Received a hit from " + str(addr))
+                print("[*] Received a hit from " + host)
+
+                if g_logfile_handle != None:
+                    g_logfile_handle.write(host)
+
         except KeyboardInterrupt:
             print("\x08\x08[*] Exiting...")
             sock.close()
@@ -59,17 +65,20 @@ def show_stats():
     else:
         print("[-] Found %d WCCP servers" % len(g_wccp_server_list))
         for entry in g_wccp_server_list:
-            print(entry)
+            host,port = entry
+            print(host)
 
         
 def main():
     global g_app_exiting
     global g_wccp_server_list
     global g_current_ip
+    global g_logfile_handle
 
     parser = OptionParser()
     parser.add_option("-t", "--target", dest="hostrange", help="IP range: x.x.x.x-y.y.y.y")
     parser.add_option("-s", "--server", dest="serveraddr", help="WCCP Server IP (disables NAT punch-through)")
+    parser.add_option("-o", "--output", dest="outputfile", help="Log file")
 
 
     (options, args) = parser.parse_args()
@@ -84,6 +93,9 @@ def main():
     else:
         wan_ip = options.serveraddr
         print("[*] Using manual server address %s" % wan_ip)
+
+    if options.outputfile:
+        g_logfile_handle = open(options.outputfile, "w")
     
 
     HOST_PORT = 2048

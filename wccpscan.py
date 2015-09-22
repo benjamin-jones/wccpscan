@@ -45,7 +45,7 @@ def listener(sock):
                 print("[*] Received a hit from " + host)
 
                 if g_logfile_handle != None:
-                    g_logfile_handle.write(host)
+                    g_logfile_handle.write(host + "\n")
 
         except KeyboardInterrupt:
             print("\x08\x08[*] Exiting...")

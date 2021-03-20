@@ -41,7 +41,7 @@ def listener(sock):
             data, addr = sock.recvfrom(1024)
             if data:
                 host, port = addr
-                g_wccp_server_list.append(addr)
+                g_wccp_server_list.append((addr, data))
                 print("[*] Received a hit from " + host)
 
                 if g_logfile_handle != None:
@@ -51,6 +51,12 @@ def listener(sock):
             print("\x08\x08[*] Exiting...")
             sock.close()
             exit(0)
+def validate_response(response):
+    try:
+        isy = wlib.wccp_isy_message(response)
+    except:
+        return "DID NOT VALIDATE"
+    return "VALID"
 def reporter():
     global g_app_exiting
     global g_current_ip
@@ -65,8 +71,11 @@ def show_stats():
     else:
         print("[-] Found %d WCCP servers" % len(g_wccp_server_list))
         for entry in g_wccp_server_list:
-            host,port = entry
-            print(host)
+
+            host,port = entry[0]
+            response = entry[1]
+            status = validate_response(response)
+            print("Host: %s\tStatus: %s" % (host, status))
 
         
 def main():
@@ -124,7 +133,7 @@ def main():
         for ip in ip_generator(startObj, stopObj):
             if ip.bytes2string() == None:
                 continue
-            message = wlib.wccp_message(ip,wan_ip)
+            message = wlib.wccp_hia_message(ip,wan_ip)
             message = message.get_message()
 
             g_current_ip = ip.bytes2string()

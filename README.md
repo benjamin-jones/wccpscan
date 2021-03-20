@@ -27,7 +27,7 @@ Then you should forward the traffic to an application:
 
 `$ iptables -t nat -A PREROUTING -i gre0 -p tcp --dport 80 -j REDIRECT --to-port <whatever port>`
 
-Remember that to properly return traffic to the client you must return responses over the GRE tunnel!
+Remember that to properly return traffic to the client they must be routable from your proxy or behind a routable NAT, otherwise you can try to return responses over the GRE tunnel!
 
 Happy proxying!
 

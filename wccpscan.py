@@ -133,7 +133,7 @@ def main():
         for ip in ip_generator(startObj, stopObj):
             if ip.bytes2string() == None:
                 continue
-            message = wlib.wccp_hia_message(ip,wan_ip)
+            message = wlib.wccp_hia_message(ip,wan_ip, None)
             message = message.get_message()
 
             g_current_ip = ip.bytes2string()

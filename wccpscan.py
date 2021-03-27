@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
-import os
 import threading
 import socket
 import time
+import csv
+import binascii
+import json
 import wccplib as wlib
 from optparse import OptionParser
 
@@ -13,14 +15,13 @@ g_current_ip = ""
 g_logfile_handle = None
 
 def ip_generator(start, stop):
-    
     current = start
     while current <= stop:
         yield current
         current = current.next()
 
-def get_ips_from_host(ip):
 
+def get_ips_from_host(ip):
     ip_list = ip.split("-")
 
     if len(ip_list) == 2:
@@ -87,14 +88,40 @@ def main():
     parser = OptionParser()
     parser.add_option("-t", "--target", dest="hostrange", help="IP range: x.x.x.x-y.y.y.y")
     parser.add_option("-s", "--server", dest="serveraddr", help="WCCP Server IP (disables NAT punch-through)")
-    parser.add_option("-o", "--output", dest="outputfile", help="Log file")
-
+    parser.add_option("-o", "--output", dest="outputfile", help="Output file")
+    parser.add_option("-i", "--input", dest="inputfile", help="Input file")
+    parser.add_option("-z", "--zmap", dest="zmap", action="store_true", default=False, help="Generate ZMap template file for WCCP")
 
     (options, args) = parser.parse_args()
-    
+
+    if options.outputfile:
+        g_logfile_handle = open(options.outputfile, "wb")
+
+    if options.zmap:
+        if not g_logfile_handle and not options.inputfile:
+            print("[*] Need an outputfile: %s" % g_logfile_handle)
+            exit(-1)
+        elif g_logfile_handle:
+            message = None
+            buffer = wlib.wccp_hia_message.get_zmap_template()
+            g_logfile_handle.write(buffer+b"\x00")
+            return 0
+        elif options.inputfile:
+            fp = open(options.inputfile, "r")
+            data = csv.DictReader(fp)
+            wccp_servers = []
+            for row in data:
+                if "VALID" == validate_response(binascii.unhexlify(row["data"])):
+                    wccp_servers.append(row["saddr"])
+            results = {"message": "Found %d valid WCCP servers" % len(wccp_servers)}
+            results["results"] = wccp_servers
+            print(json.dumps(results))
+            exit(0)
+            
+
     if not options.hostrange:
-        print "Supply a host range with -t"
-	return -1
+        print("[*] Supply a host range with -t")
+        return -1
     
     if not options.serveraddr:
         wan_ip = wlib.get_my_wan_address()
@@ -102,10 +129,6 @@ def main():
     else:
         wan_ip = options.serveraddr
         print("[*] Using manual server address %s" % wan_ip)
-
-    if options.outputfile:
-        g_logfile_handle = open(options.outputfile, "w")
-    
 
     HOST_PORT = 2048
 
@@ -116,11 +139,11 @@ def main():
     startObj = wlib.ip_address(start)
     stopObj = wlib.ip_address(stop)
     
-    sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(('',HOST_PORT))
+    sock.bind(('', HOST_PORT))
 
-    t = threading.Thread(target=listener, args={sock,})
+    t = threading.Thread(target=listener, args={sock, })
     t.setDaemon(True)
     t.start()
 
@@ -160,6 +183,7 @@ def main():
 
     return 0
 
-if __name__=="__main__":
-	ret = main()
-        exit(0)
+
+if __name__ == "__main__":
+    ret = main()
+    exit(0)

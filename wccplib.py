@@ -1,4 +1,3 @@
-import os
 import struct
 
 WCCP2_HERE_I_AM = struct.pack("!I", 10)
@@ -16,40 +15,43 @@ WCCP2_REDIRECT_ASSIGN2 = struct.pack("!H", 6)
 WCCP2_ROUTER_ID_INFO = struct.pack("!H", 2)
 WCCP2_ROUTER_VIEW_INFO = struct.pack("!H", 4)
 
+
 class ip_address:
-    def string2bytes(self,ip):
+    def string2bytes(self, ip):
         octet_list = ip.strip().split('.')
         byte_string = b"".join([struct.pack("!B", int(i)) for i in octet_list])
         return byte_string
-    def __init__(self,ip):
+
+    def __init__(self, ip):
         self.ip = self.string2bytes(ip)
+
     def get_ip(self):
         return self.ip
-    
+
     def bytes2string(self):
         ip_string = ""
-        ip_string += str(struct.unpack_from("!B",self.ip,offset=0)[0])
+        ip_string += str(struct.unpack_from("!B", self.ip, offset=0)[0])
         ip_string += "."
-        ip_string += str(struct.unpack_from("!B",self.ip,offset=1)[0])
+        ip_string += str(struct.unpack_from("!B", self.ip, offset=1)[0])
         ip_string += "."
-        ip_string += str(struct.unpack_from("!B",self.ip,offset=2)[0])
+        ip_string += str(struct.unpack_from("!B", self.ip, offset=2)[0])
         ip_string += "."
-        ip_string += str(struct.unpack_from("!B",self.ip,offset=3)[0])
+        ip_string += str(struct.unpack_from("!B", self.ip, offset=3)[0])
         return ip_string
 
     def int2bytes(self, ip):
-        return struct.pack(">I",ip)
+        return struct.pack(">I", ip)
 
     def next(self):
-        ip_int = int(self.ip.encode("hex"),16)
+        ip_int = int(self.ip.encode("hex"), 16)
         ip_int = ip_int + 1
         self.ip = self.int2bytes(ip_int)
         return self
-    
+
     def __cmp__(self, other):
 
-        ip_int = int(self.ip.encode("hex"),16)
-        other_int = int(other.get_ip().encode("hex"),16)
+        ip_int = int(self.ip.encode("hex"), 16)
+        other_int = int(other.get_ip().encode("hex"), 16)
 
         if ip_int < other_int:
             return -1
@@ -58,121 +60,185 @@ class ip_address:
         else:
             return 1
 
+
 def get_my_wan_address():
-    raise NotImplemented
+    raise NotImplementedError
+
 
 class wccp_web_cache_view_info_component:
-    def __init__(self,rip,ip, last_isy):
-            self.type = WCCP2_WC_VIEW_INFO
-            self.change = struct.pack("!I",1) 
-            self.nRouter = struct.pack("!I",1) 
-            self.router_list = []
-            if last_isy != None:
-                    self.router_list.append(last_isy.router_ip.get_ip())
-            else:
-                self.router_list.append(rip.get_ip())
-            if last_isy != None:
-                self.rID = struct.pack("!I",last_isy.recv_id)
-            else:
-                self.rID = struct.pack("!I", 0xFFFFFFFF)
-            self.nCaches = struct.pack("!I",0)
-            self.cache = ip_address(ip).get_ip()
-            data = b"".join([
-                self.change,
-                self.nRouter,
-                b"".join(self.router_list),
-                self.rID,
-                self.nCaches
-            ])
-            length = len(data)
-            self.length = struct.pack("!H",length)
-            self.data = b"".join([self.type, self.length, data])
-        
+    def __init__(self, rip, ip, last_isy):
+        self.type = WCCP2_WC_VIEW_INFO
+        self.change = struct.pack("!I", 1) 
+        self.nRouter = struct.pack("!I", 1) 
+        self.router_list = []
+        if last_isy != None:
+            self.router_list.append(last_isy.router_ip.get_ip())
+        else:
+            self.router_list.append(rip.get_ip())
+        if last_isy != None:
+            self.rID = struct.pack("!I", last_isy.recv_id)
+        else:
+            self.rID = struct.pack("!I", 0xFFFFFFFF)
+        self.nCaches = struct.pack("!I", 1)
+        self.cache = ip_address(ip).get_ip()
+        data = b"".join([
+            self.change,
+            self.nRouter,
+            b"".join(self.router_list),
+            self.rID,
+            self.nCaches,
+            self.cache
+        ])
+        length = len(data)
+        self.length = struct.pack("!H", length)
+        self.data = b"".join([self.type, self.length, data])
+    
     def get_data(self):
         return self.data
+
+    @staticmethod
+    def get_zmap_template():
+        type = WCCP2_WC_VIEW_INFO
+        change = struct.pack("!I", 1) 
+        nRouter = struct.pack("!I", 1) 
+        router_list = []
+        router_list.append(b"${DADDR_N}")
+        rID = struct.pack("!I", 0xFFFFFFFF)
+        nCaches = struct.pack("!I", 1)
+        cache = b"${SADDR_N}"
+        data = b"".join([
+            change,
+            nRouter,
+            b"".join(router_list),
+            rID,
+            nCaches,
+            cache
+        ])
+        length = len(data) - len("${XADDR_N}")*2 + 8
+        length = struct.pack("!H", length)
+        return b"".join([type, length, data])
+
+
 class wccp_web_cache_identity_info_component:
     def __init__(self, ip):
-            self.type = WCCP2_WC_ID_INFO
-            self.identity_element = ip_address(ip).get_ip()
-            self.rht = struct.pack("!I",0) + struct.pack("!I",0xFFFFFFFF)*8
-            self.rht += struct.pack("!H", 10000)
-            self.rht += struct.pack("!H", 0)
-            data = b"".join([
-                self.identity_element,
-                self.rht,
-            ])
-            length = len(data)
-            self.length = struct.pack("!H", length)
-            self.data = b"".join([self.type, self.length, data])
+        self.type = WCCP2_WC_ID_INFO
+        self.identity_element = ip_address(ip).get_ip()
+        self.rht = struct.pack("!I", 0) + struct.pack("!I",0xFFFFFFFF)*8
+        self.rht += struct.pack("!H", 10000)
+        self.rht += struct.pack("!H", 0)
+        data = b"".join([
+            self.identity_element,
+            self.rht,
+        ])
+        length = len(data)
+        self.length = struct.pack("!H", length)
+        self.data = b"".join([self.type, self.length, data])
+    
     def get_data(self):
         return self.data
+
+    @staticmethod
+    def get_zmap_template():
+        type = WCCP2_WC_ID_INFO
+        rht = struct.pack("!I", 0) + struct.pack("!I", 0xFFFFFFFF)*8
+        rht += struct.pack("!H", 10000)
+        rht += struct.pack("!H", 0)
+        data = b"".join([
+            b"${SADDR_N}",
+            rht
+        ])
+        length = len(data) - 9 + 4 - 1
+        length = struct.pack("!H", length)
+        return b"".join([type, length, data])
 
 
 class wccp_service_info_component:
     def __init__(self):
-            self.type = WCCP2_SERVICE_INFO
-            self.service_type = WCCP2_SERVICE_STANDARD
-            self.service_id = struct.pack("!B", 0)
-            self.priority = struct.pack("!B", 0)
-            self.protocol = struct.pack("!B", 0)
-            self.service_flags = struct.pack("!I",0)
-            self.ports = []
-            for i in range(0,8):
-                    self.ports.append(struct.pack("!H",0))
+        self.type = WCCP2_SERVICE_INFO
+        self.service_type = WCCP2_SERVICE_STANDARD
+        self.service_id = struct.pack("!B", 0)
+        self.priority = struct.pack("!B", 0)
+        self.protocol = struct.pack("!B", 0)
+        self.service_flags = struct.pack("!I",0)
+        self.ports = []
+        for i in range(0,8):
+                self.ports.append(struct.pack("!H", 0))
 
-            data = b"".join([
-                self.service_type,
-                self.service_id,
-                self.priority,
-                self.protocol,
-                self.service_flags,
-                b"".join(self.ports)
-            ])
-            length = len(data)
-            self.length = struct.pack("!H", length)
-            self.data = b"".join([self.type, self.length, data])
+        data = b"".join([
+            self.service_type,
+            self.service_id,
+            self.priority,
+            self.protocol,
+            self.service_flags,
+            b"".join(self.ports)
+        ])
+        length = len(data)
+        self.length = struct.pack("!H", length)
+        self.data = b"".join([self.type, self.length, data])
+    
     def get_data(self):
         return self.data
+
 
 class wccp_security_component:
     def __init__(self):
-            self.type = WCCP2_SECURITY_INFO
-            self.option = WCCP2_NO_SECURITY
+        self.type = WCCP2_SECURITY_INFO
+        self.option = WCCP2_NO_SECURITY
 
-            data = b"".join([
-                self.option
-            ])
-            length = len(data)
-            self.length = struct.pack("!H", length)
-            self.data = b"".join([self.type, self.length, data])
+        data = b"".join([
+            self.option
+        ])
+        length = len(data)
+        self.length = struct.pack("!H", length)
+        self.data = b"".join([self.type, self.length, data])
+
     def get_data(self):
         return self.data
+
+
 class wccp_hia_header:
     def __init__(self, message):
-            self.type = WCCP2_HERE_I_AM
-            self.version = WCCP2_VERSION
-            data = message
+        self.type = WCCP2_HERE_I_AM
+        self.version = WCCP2_VERSION
+        data = message
+        if b"${SADDR_N}" in data:
+            length = len(data) - len("${SADDR_N}") - len("${DADDR_N}") - len("${SADDR_N}") + 12
+        else:
             length = len(data)
-            self.length = struct.pack("!H",length)
-            self.data = b"".join([self.type, self.version, self.length, data])
+        self.length = struct.pack("!H", length)
+        self.data = b"".join([self.type, self.version, self.length, data])
+    
     def get_data(self):
         return self.data
             
-class wccp_hia_message:
-    def __init__(self,rip,ip, last_isy):
-            self.security = wccp_security_component()
-            self.service_info = wccp_service_info_component()
-            self.identity_info = wccp_web_cache_identity_info_component(ip)
-            self.view_info = wccp_web_cache_view_info_component(rip,ip, last_isy)
-    def get_message(self):
-            msg = b"".join([
-                self.security.get_data(),
-                self.service_info.get_data(),
-                self.identity_info.get_data(),
-                self.view_info.get_data()
-            ])
 
-            return wccp_hia_header(msg).get_data()
+class wccp_hia_message:
+    def __init__(self, rip, ip, last_isy):
+        self.security = wccp_security_component()
+        self.service_info = wccp_service_info_component()
+        self.identity_info = wccp_web_cache_identity_info_component(ip)
+        self.view_info = wccp_web_cache_view_info_component(rip, ip, last_isy)
+    
+    def get_message(self):
+        msg = b"".join([
+            self.security.get_data(),
+            self.service_info.get_data(),
+            self.identity_info.get_data(),
+            self.view_info.get_data()
+        ])
+
+        return wccp_hia_header(msg).get_data()
+
+    @staticmethod
+    def get_zmap_template():
+        msg = b"".join([
+            wccp_security_component().get_data(),
+            wccp_service_info_component().get_data(),
+            wccp_web_cache_identity_info_component.get_zmap_template(),
+            wccp_web_cache_view_info_component.get_zmap_template()
+        ])
+        return wccp_hia_header(msg).get_data()
+
 
 class wccp_assignment_info_component:
     '''
@@ -232,52 +298,55 @@ class wccp_assignment_info_component:
 
     '''
     def __init__(self, ip, isy_msg):
-            self.type = WCCP2_REDIRECT_ASSIGN2
-            self.key_ip = ip_address(ip).get_ip()
-            self.key_change_number = struct.pack("!I", 0xFFFFFFFF)
-            self.nrouters = struct.pack("!I", 1)
-            self.router_ip = isy_msg.router_ip.get_ip()
-            self.recv_id = struct.pack("!I", isy_msg.recv_id)
-            self.change_num = struct.pack("!I", isy_msg.member_change_number)
-            self.nservers = struct.pack("!I",1)
-            self.server_ip = ip_address(ip).get_ip()
-            self.bucket = b"".join([struct.pack("!B", 0x0) for _ in range(0,256)])
+        self.type = WCCP2_REDIRECT_ASSIGN2
+        self.key_ip = ip_address(ip).get_ip()
+        self.key_change_number = struct.pack("!I", 0xFFFFFFFF)
+        self.nrouters = struct.pack("!I", 1)
+        self.router_ip = isy_msg.router_ip.get_ip()
+        self.recv_id = struct.pack("!I", isy_msg.recv_id)
+        self.change_num = struct.pack("!I", isy_msg.member_change_number)
+        self.nservers = struct.pack("!I",1)
+        self.server_ip = ip_address(ip).get_ip()
+        self.bucket = b"".join([struct.pack("!B", 0x0) for _ in range(0,256)])
+
+        data = b"".join([
+            self.key_ip,
+            self.key_change_number,
+            self.nrouters,
+            self.router_ip,
+            self.recv_id,
+            self.change_num,
+            self.nservers,
+            self.server_ip,
+            self.bucket
+        ])
+        length = len(data)
+        self.length = struct.pack("!H", length)
+        self.data = b"".join([self.type, self.length, data])
     
-            data = b"".join([
-                self.key_ip,
-                self.key_change_number,
-                self.nrouters,
-                self.router_ip,
-                self.recv_id,
-                self.change_num,
-                self.nservers,
-                self.server_ip,
-                self.bucket
-            ])
-            length = len(data)
-            self.length = struct.pack("!H", length)
-            self.data = b"".join([self.type, self.length, data])
     def get_data(self):
         return self.data
-
 
 
 class wccp_ra_header:
     def __init__(self, message):
-            self.type = WCCP2_REDIRECT_ASSIGN
-            self.version = WCCP2_VERSION
-            data = message
-            length = len(data)
-            self.length = struct.pack("!H",length)
-            self.data = b"".join([self.type, self.version, self.length, data])
+        self.type = WCCP2_REDIRECT_ASSIGN
+        self.version = WCCP2_VERSION
+        data = message
+        length = len(data)
+        self.length = struct.pack("!H",length)
+        self.data = b"".join([self.type, self.version, self.length, data])
+   
     def get_data(self):
         return self.data
+
 
 class wccp_ra_message:
     def __init__(self, ip, isy_msg):
         self.security = wccp_security_component()
         self.service_info = wccp_service_info_component()
         self.assignment_info = wccp_assignment_info_component(ip, isy_msg)
+
     def get_message(self):
         msg = b"".join([
             self.security.get_data(),
@@ -295,13 +364,13 @@ class wccp_isy_message:
         self.type = struct.pack("!I", result)
 
         if self.type != WCCP2_I_SEE_YOU:
-            raise ValueError ("Wrong header type")
+            raise ValueError("Wrong header type")
 
         msg = msg[4:]
         self.version = struct.unpack_from("!H", msg, offset=offset)[0]
 
         if self.version != 0x200:
-            raise ValueError ("Wrong version %d" % (self.version))
+            raise ValueError("Wrong version %d" % (self.version))
 
         msg = msg[2:]
 
@@ -310,10 +379,10 @@ class wccp_isy_message:
         msg = msg[2:]
         
         if self.length != len(msg):
-            raise ValueError ("Header length mismatch")
+            raise ValueError("Header length mismatch")
 
         if struct.unpack_from("!H", msg, offset=offset)[0] != 0x0:
-            raise ValueError ( "wrong security type")
+            raise ValueError( "wrong security type")
         
         msg = msg[2:]
         
@@ -326,7 +395,7 @@ class wccp_isy_message:
         msg = msg[4:]
 
         if struct.unpack_from("!H", msg, offset=offset)[0] != 0x1:
-            raise ValueError ("Service info type wrong")
+            raise ValueError("Service info type wrong")
         
         msg = msg[2:]
 
@@ -335,7 +404,7 @@ class wccp_isy_message:
         msg = msg[skip_length:]
 
         if struct.unpack_from("!H", msg, offset=offset)[0] != 0x2:
-            raise ValueError ("Router ID type wrong")
+            raise ValueError("Router ID type wrong")
         msg = msg[2:]
 
         router_id_length = struct.unpack_from("!H", msg, offset=offset)[0]
@@ -374,7 +443,7 @@ class wccp_isy_message:
         router_id_length -= 4
 
         if n_recv_from_addrs*4 != router_id_length:
-            raise ValueError ("router id length mismatch %d %d" % (n_recv_from_addrs*4, router_id_length))
+            raise ValueError("router id length mismatch %d %d" % (n_recv_from_addrs*4, router_id_length))
 
         self.recv_from_addrs = []
         while n_recv_from_addrs > 0:
@@ -391,10 +460,10 @@ class wccp_isy_message:
             n_recv_from_addrs -= 1
 
         if router_id_length != 0:
-            raise ValueError ("did not consume all router id elements")
+            raise ValueError("did not consume all router id elements")
 
         if struct.unpack_from("!H", msg, offset=offset)[0] != 0x4:
-            raise ValueError ("router view type wrong")
+            raise ValueError("router view type wrong")
 
         msg = msg[2:]
 
@@ -445,12 +514,6 @@ class wccp_isy_message:
         router_view_length -= 4
 
         if n_servers*44 != router_view_length:
-            raise ValueError ("router view length mismatch %d %d" % (n_servers*44, router_view_length))
+            raise ValueError("router view length mismatch %d %d" % (n_servers*44, router_view_length))
 
         self.web_cache_info = msg
-
-
-
-
-
-

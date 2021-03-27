@@ -1,0 +1,5 @@
+*.pyc
+*.pcap
+*.csv
+__pycache__
+.vscode

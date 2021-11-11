@@ -27,6 +27,10 @@ class ip_address:
 
     def get_ip(self):
         return self.ip
+    
+    def get_ip_int(self):
+        return struct.unpack(">I", self.ip)[0]
+
 
     def bytes2string(self):
         ip_string = ""
@@ -43,7 +47,7 @@ class ip_address:
         return struct.pack(">I", ip)
 
     def next(self):
-        ip_int = int(self.ip.encode("hex"), 16)
+        ip_int = self.get_ip_int()
         ip_int = ip_int + 1
         self.ip = self.int2bytes(ip_int)
         return self
@@ -153,15 +157,35 @@ class wccp_web_cache_identity_info_component:
 
 
 class wccp_service_info_component:
-    def __init__(self):
+    def __init__(self, sid=WCCP2_SERVICE_STANDARD, port_spec=None):
         self.type = WCCP2_SERVICE_INFO
-        self.service_type = WCCP2_SERVICE_STANDARD
-        self.service_id = struct.pack("!B", 0)
+        self.sid = sid
+        if isinstance(sid, str):
+            self.sid = sid.encode('utf-8')
+        elif isinstance(sid, int):
+            self.sid = struct.pack("!B", sid)
+        self.service_id = self.sid
+        self.service_type = WCCP2_SERVICE_STANDARD if self.service_id == WCCP2_SERVICE_STANDARD else b'\x01'
         self.priority = struct.pack("!B", 0)
-        self.protocol = struct.pack("!B", 0)
-        self.service_flags = struct.pack("!I",0)
+        protocol = 0x0 # IPv6 (will give everything!)
+        if port_spec is not None:
+            protocol = 0x06 #TCP
+        self.protocol = struct.pack("!B", protocol)
+        if port_spec is not None:
+            ports_defined = 0x10
+            dest_port_hash = 0x08
+            redirect_only = 0x40
+        else:
+            ports_defined = 0
+            dest_port_hash = 0
+            redirect_only = 0
+        self.service_flags = struct.pack("!I",0+ports_defined+redirect_only+dest_port_hash)
         self.ports = []
-        for i in range(0,8):
+        if port_spec is not None:
+            for port in port_spec:
+                self.ports.append(struct.pack("!H", port))
+        else:
+            for i in range(0,8):
                 self.ports.append(struct.pack("!H", 0))
 
         data = b"".join([
@@ -213,9 +237,9 @@ class wccp_hia_header:
             
 
 class wccp_hia_message:
-    def __init__(self, rip, ip, last_isy):
+    def __init__(self, rip, ip, last_isy, sid=WCCP2_SERVICE_STANDARD, port_spec=None):
         self.security = wccp_security_component()
-        self.service_info = wccp_service_info_component()
+        self.service_info = wccp_service_info_component(sid, port_spec)
         self.identity_info = wccp_web_cache_identity_info_component(ip)
         self.view_info = wccp_web_cache_view_info_component(rip, ip, last_isy)
     
@@ -342,9 +366,9 @@ class wccp_ra_header:
 
 
 class wccp_ra_message:
-    def __init__(self, ip, isy_msg):
+    def __init__(self, ip, isy_msg, sid=WCCP2_SERVICE_STANDARD, port_spec=None):
         self.security = wccp_security_component()
-        self.service_info = wccp_service_info_component()
+        self.service_info = wccp_service_info_component(sid, port_spec)
         self.assignment_info = wccp_assignment_info_component(ip, isy_msg)
 
     def get_message(self):
@@ -401,7 +425,14 @@ class wccp_isy_message:
 
         skip_length = struct.unpack_from("!H", msg, offset=offset)[0]
         msg = msg[2:]
-        msg = msg[skip_length:]
+
+        self.service_type = struct.unpack_from("!B", msg, offset=offset)[0]
+        msg = msg[1:]
+
+        self.service_id = struct.unpack_from("!B", msg, offset=offset)[0]
+        msg = msg[1:]
+
+        msg = msg[skip_length-2:]
 
         if struct.unpack_from("!H", msg, offset=offset)[0] != 0x2:
             raise ValueError("Router ID type wrong")

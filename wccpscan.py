@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import threading
 import socket
@@ -16,7 +16,7 @@ g_logfile_handle = None
 
 def ip_generator(start, stop):
     current = start
-    while current <= stop:
+    while current.get_ip_int() <= stop.get_ip_int():
         yield current
         current = current.next()
 
@@ -63,14 +63,14 @@ def reporter():
     global g_current_ip
 
     while not g_app_exiting:
-        data = raw_input("")
+        data = input("")
         print("[*] Current IP %s" % g_current_ip)
         time.sleep(1)
 def show_stats():
     if len(g_wccp_server_list) == 0:
         print("[*] Nothing found!")
     else:
-        print("[-] Found %d WCCP servers" % len(g_wccp_server_list))
+        print("[-] Found %d potential WCCP servers" % len(g_wccp_server_list))
         for entry in g_wccp_server_list:
 
             host,port = entry[0]
